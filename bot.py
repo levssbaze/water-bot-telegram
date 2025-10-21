@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-# =================== НАСТРОЙКИ ===================
-TOKEN = "8228969867:AAEBrLBjaxnhZjiEBTCGuqKX3VeOAffAHV4"
-GROUP_ID = -1003015346551
-ADMIN_ID = 577104457
+# =================== НАСТРОЙКИ (БЕЗОПАСНЫЕ!) ===================
+TOKEN = os.environ.get('BOT_TOKEN')
+GROUP_ID = int(os.environ.get('GROUP_ID'))
+ADMIN_ID = int(os.environ.get('ADMIN_ID'))
 BOT_USERNAME = "@watereverydaybot"
 
 MOTIVATION = [
@@ -27,18 +27,17 @@ MOTIVATION = [
 
 GENDER, AGE, WEIGHT, ACTIVITY, CLIMATE, PREGNANCY, CUSTOM_GOAL = range(7)
 
-# =================== БАЗА ДАННЫХ (ПЕРЕСОЗДАЁТСЯ!) ===================
+# =================== БАЗА ДАННЫХ ===================
 def init_db():
     conn = sqlite3.connect('water_bot.db')
     c = conn.cursor()
     
-    # УДАЛЯЕМ СТАРУЮ БАЗУ + СОЗДАЁМ НОВУЮ
+    # Пересоздаём таблицы
     c.execute("DROP TABLE IF EXISTS users")
     c.execute("DROP TABLE IF EXISTS daily_stats")
     c.execute("DROP TABLE IF EXISTS marathon_history")
     c.execute("DROP TABLE IF EXISTS messages")
     
-    # НОВАЯ БАЗА
     c.execute('''CREATE TABLE users (
         user_id INTEGER PRIMARY KEY,
         gender TEXT,
@@ -91,7 +90,7 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print("✅ БАЗА ДАННЫХ ПЕРЕСОЗДАНА!")
+    print("✅ БАЗА ДАННЫХ СОЗДАНА!")
 
 def get_user(user_id):
     conn = sqlite3.connect('water_bot.db')
@@ -303,7 +302,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     progress = min(int((user[8] / user[7]) * 10), 10)
     bar = "🔵" * progress + "⚪" * (10 - progress)
     
-    # Календарь
+    # Календарь (5 дней)
     today = datetime.now()
     calendar_text = ""
     for i in range(5):
@@ -358,9 +357,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 /start — Опрос цели
 /log — Ввод воды
-/stats — Статистика
-/reset_stats — Сброс  
-/new_marathon — Новый марафон
+/stats — Статистика + календарь
+/reset_stats — Сброс статистики  
+/new_marathon — Новый 30-дневный марафон
 /unsubscribe — Выкл. напоминания
 
 👥 Группа: t.me/+Ic9SbOrxNWQzNmIy"""
@@ -508,7 +507,15 @@ def main():
     app.job_queue.run_daily(daily_reset, time=time(0, 0))
     
     print("🤖 @watereverydaybot ЗАПУЩЕН! ✅ 20 ФИЧ!")
-    app.run_polling()
+    
+    # WEBHOOK ДЛЯ RENDER
+    port = int(os.environ.get('PORT', 8443))
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    )
 
 if __name__ == '__main__':
     main()
